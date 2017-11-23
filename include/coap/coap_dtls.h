@@ -8,18 +8,22 @@
  * of use.
  */
 
-#ifndef _COAP_DTLS_H_
-#define _COAP_DTLS_H_
-
 #include "net.h"
 #include "coap_session.h"
 #include "pdu.h"
+
+#ifndef _COAP_DTLS_H_
+#define _COAP_DTLS_H_
 
 /**
  * @defgroup dtls DTLS Support
  * API functions for interfacing with DTLS libraries.
  * @{
  */
+
+typedef enum dtls_curve_t {
+    SECP256R1
+} dtls_curve_t;
 
 /** Returns 1 if support for DTLS is enabled, or 0 otherwise. */
 int coap_dtls_is_supported(void);

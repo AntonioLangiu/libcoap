@@ -436,6 +436,42 @@ void coap_context_set_psk(coap_context_t *ctx,
   }
 }
 
+#define COPY_PARAM(ctx, param, len) {\
+  if (ctx->param) \
+      coap_free(ctx->param); \
+  ctx->param = NULL; \
+  if (param) {\
+      ctx->param = coap_malloc(len); \
+      if (ctx->param) { \
+          memcpy(ctx->param, param, len); \
+      } else { \
+          coap_log(LOG_ERR, "no memory to alloc %s\n", param); \
+      } \
+  }}\
+
+void coap_context_set_ecdsa(coap_context_t *ctx, dtls_curve_t curve,
+        const uint8_t *priv_key, const uint8_t *pub_key_x,
+        const uint8_t *pub_key_y,
+        int (*verify_key) (const coap_session_t *session, const uint8_t *other_pub_x,
+            const uint8_t *other_pub_y, size_t key_size)) {
+    int curve_len = -1;
+    if (curve == SECP256R1) {
+        curve_len = 32;
+    } else {
+        coap_log(LOG_ERR, "unsupported curve\n");
+        return;
+    }
+    ctx->curve = curve;
+
+    COPY_PARAM(ctx, priv_key, curve_len);
+    COPY_PARAM(ctx, pub_key_x, curve_len);
+    COPY_PARAM(ctx, pub_key_y, curve_len);
+    ctx->verify_key = NULL;
+    if (verify_key) {
+        ctx->verify_key = verify_key;
+    }
+}
+
 coap_context_t *
 coap_new_context(
   const coap_address_t *listen_addr) {
@@ -558,6 +594,14 @@ coap_free_context(coap_context_t *context) {
   if (context->psk_key)
     coap_free(context->psk_key);
 
+  if (context->priv_key)
+    coap_free(context->priv_key);
+
+  if (context->pub_key_x)
+    coap_free(context->pub_key_x);
+
+  if (context->pub_key_y)
+    coap_free(context->pub_key_y);
 #ifndef WITH_CONTIKI
   coap_free_type(COAP_CONTEXT, context);
 #endif/* not WITH_CONTIKI */

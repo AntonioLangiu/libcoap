@@ -155,6 +155,21 @@ dtls_event(struct dtls_context_t *dtls_context,
   return 0;
 }
 
+static int
+get_coap_ctx_from_dtls_ctx(struct dtls_context_t *dtls_context,
+    const session_t *dtls_session,
+    coap_context_t **coap_context,
+    coap_session_t **coap_session) {
+    coap_address_t remote_addr;
+    *coap_context = (coap_context_t *)dtls_get_app_data(dtls_context);
+    get_session_addr(dtls_session, &remote_addr);
+    *coap_session = coap_session_get_by_peer(*coap_context, &remote_addr, dtls_session->ifindex);
+    if (!*coap_session) {
+        return 0;
+    }
+    return 1;
+}
+
 /* This function is the "key store" for tinyDTLS. It is called to
  * retrieve a key for the given identity within this particular
  * session. */
@@ -171,8 +186,6 @@ get_psk_info(struct dtls_context_t *dtls_context,
   static int client = 0;
   static uint8_t psk[128];
   static size_t psk_len = 0;
-  coap_address_t remote_addr;
-
 
   if (type == DTLS_PSK_KEY && client) {
     if (psk_len > result_length) {
@@ -185,10 +198,8 @@ get_psk_info(struct dtls_context_t *dtls_context,
   }
 
   client = 0;
-  coap_context = (coap_context_t *)dtls_get_app_data(dtls_context);
-  get_session_addr(dtls_session, &remote_addr);
-  coap_session = coap_session_get_by_peer(coap_context, &remote_addr, dtls_session->ifindex);
-  if (!coap_session) {
+
+  if (!get_coap_ctx_from_dtls_ctx(dtls_context, dtls_session, &coap_context, &coap_session)) {
     debug("cannot get PSK, session not found\n");
     goto error;
   }
@@ -233,14 +244,58 @@ error:
   return dtls_alert_fatal_create(fatal_error);
 }
 
+static int
+get_ecdsa_key(struct dtls_context_t *dtls_context,
+        const session_t *dtls_session,
+        const dtls_ecdsa_key_t **result) {
+    coap_context_t *coap_context;
+    coap_session_t *coap_session;
+    if (!get_coap_ctx_from_dtls_ctx(dtls_context, dtls_session, &coap_context, &coap_session)) {
+        coap_log(LOG_WARNING, "error getting ecdsa_key\n");
+        return -1;
+    }
+    dtls_ecdsa_key_t* ecdsa_key = (dtls_ecdsa_key_t*) coap_malloc(sizeof(dtls_ecdsa_key_t));
+    if (coap_context->curve == SECP256R1) {
+        ecdsa_key->curve = DTLS_ECDH_CURVE_SECP256R1;
+    } else {
+       coap_log(LOG_WARNING, "Curve not supported\n");
+       return -1;
+    }
+    ecdsa_key->priv_key = coap_context->priv_key;
+    ecdsa_key->pub_key_x = coap_context->pub_key_x;
+    ecdsa_key->pub_key_y = coap_context->pub_key_y;
+    coap_context->ecdsa_key = ecdsa_key;
+    *result = ecdsa_key;
+    return 0;
+}
+
+static int
+verify_ecdsa_key(struct dtls_context_t *dtls_context,
+        const session_t *dtls_session,
+        const unsigned char *other_pub_x,
+        const unsigned char *other_pub_y,
+        size_t key_size) {
+    coap_context_t *coap_context;
+    coap_session_t *coap_session;
+    if (!get_coap_ctx_from_dtls_ctx(dtls_context, dtls_session, &coap_context, &coap_session)) {
+        coap_log(LOG_WARNING, "error verifying ecdsa_key\n");
+        return -1;
+    }
+    if (coap_context->verify_key)
+        return coap_context->verify_key(coap_session, other_pub_x, other_pub_y, key_size);
+    return -1;
+}
+
 static dtls_handler_t cb = {
   .write = dtls_send_to_peer,
   .read = dtls_application_data,
   .event = dtls_event,
+#ifndef WITHOUT_PSK
   .get_psk_info = get_psk_info,
-#ifdef WITH_ECC
-  .get_ecdsa_key = NULL,
-  .verify_ecdsa_key = NULL
+#endif
+#ifndef WITHOUT_ECDSA
+  .get_ecdsa_key = get_ecdsa_key,
+  .verify_ecdsa_key = verify_ecdsa_key
 #endif
 };
 
@@ -249,6 +304,7 @@ coap_dtls_new_context(struct coap_context_t *coap_context) {
   struct dtls_context_t *dtls_context = dtls_new_context(coap_context);
   if (!dtls_context)
     goto error;
+
   dtls_set_handler(dtls_context, &cb);
   return dtls_context;
 error:
@@ -330,6 +386,10 @@ coap_dtls_free_session(coap_session_t *coap_session) {
       dtls_close(ctx, (session_t *)coap_session->tls);
     debug("*** removed session %p\n", coap_session->tls);
     coap_free_type(COAP_DTLS_SESSION, coap_session->tls);
+    if (coap_session->context->ecdsa_key) {
+        coap_free(coap_session->context->ecdsa_key);
+        coap_session->context->ecdsa_key = NULL;
+    }
   }
 }
 

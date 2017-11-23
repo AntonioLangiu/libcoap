@@ -143,6 +143,13 @@ typedef struct coap_context_t {
   uint8_t *psk_key;
   size_t psk_key_len;
 
+  dtls_curve_t curve;
+  uint8_t *priv_key;
+  uint8_t *pub_key_x;
+  uint8_t *pub_key_y;
+  void *ecdsa_key;
+  int (*verify_key) (const coap_session_t *session, const uint8_t *other_pub_x, const uint8_t *other_pub_y, size_t key_size);
+
   unsigned int session_timeout;	   /**< Number of seconds of inactivity after which an unused session will be closed. 0 means use default. */
   unsigned int max_idle_sessions;  /**< Maximum number of simultaneous unused sessions per endpoint. 0 means no maximum. */
   unsigned int keepalive_interval; /**< Minimum interval before sending a keepalive message. 0 means disabled. */
@@ -224,6 +231,15 @@ coap_context_t *coap_new_context(const coap_address_t *listen_addr);
 void coap_context_set_psk( coap_context_t *ctx, const char *hint,
                            const uint8_t *key, size_t key_len );
 
+/**
+ * Set the context's default ecdsa key.
+ * TODO: finish the documentation
+ */
+void coap_context_set_ecdsa(coap_context_t *ctx, dtls_curve_t curve,
+        const uint8_t *priv_key, const uint8_t *pub_key_x,
+        const uint8_t *pub_key_y,
+        int (*verify_key) (const coap_session_t *session, const uint8_t *other_pub_x,
+            const uint8_t *other_pub_y, size_t key_size));
 /**
  * Returns a new message id and updates @p context->message_id accordingly. The
  * message id is returned in network byte order to make it easier to read in
