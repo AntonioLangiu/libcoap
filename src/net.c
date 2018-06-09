@@ -445,8 +445,8 @@ coap_new_context(
   }
 
 #if !defined(WITH_LWIP)
-  // XXX c->network_send = coap_network_send;
-  // XXX c->network_read = coap_network_read;
+  c->network_send = coap_network_send;
+  c->network_read = coap_network_read;
 #endif
 
   c->get_client_psk = coap_get_session_client_psk;

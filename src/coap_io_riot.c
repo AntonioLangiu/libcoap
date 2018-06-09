@@ -65,17 +65,9 @@ int coap_socket_connect_udp(coap_socket_t *sock, const coap_address_t *local_if,
 
     // Ignore local interface and address
     // (3) Connect the socket
-    if (connect(sock->fd, &connect_addr.addr.sa, connect_addr.size) == COAP_SOCKET_ERROR) {
+    if (connect(sock->fd, &connect_addr.addr, connect_addr.size) == COAP_SOCKET_ERROR) {
         coap_log(LOG_WARNING, "coap_socket_connect_udp: connect: %s\n", coap_socket_strerror());
         goto error;
-    }
-
-    if (getsockname(sock->fd, &local_addr->addr.sa, &local_addr->size) == COAP_SOCKET_ERROR) {
-        coap_log(LOG_WARNING, "coap_socket_connect_udp: getsockname: %s\n", coap_socket_strerror());
-    }
-
-    if (getpeername(sock->fd, &remote_addr->addr.sa, &remote_addr->size) == COAP_SOCKET_ERROR) {
-        coap_log(LOG_WARNING, "coap_socket_connect_udp: getpeername: %s\n", coap_socket_strerror());
     }
 
     sock->flags |= COAP_SOCKET_CONNECTED;
@@ -87,10 +79,11 @@ error:
 
 ssize_t coap_network_send(coap_socket_t *sock, const coap_session_t *session, const uint8_t *data, size_t datalen) {
     ssize_t bytes_written = 0;
-    bytes_written = send(sock->fd, data, datalen, 0);
+    bytes_written = sendto(sock->fd, data, datalen, 0, &session->remote_addr.addr, session->remote_addr.size);
 
-    if (bytes_written < 0)
+    if (bytes_written < 0) {
         coap_log(LOG_CRIT, "coap_network_send: %s\n", coap_socket_strerror());
+    }
 
     return bytes_written;
 }
