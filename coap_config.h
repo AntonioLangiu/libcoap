@@ -76,9 +76,6 @@
 /* Define to 1 if you have the `strrchr' function. */
 #define HAVE_STRRCHR 1
 
-/* Define to 1 if you have the <syslog.h> header file. */
-#define HAVE_SYSLOG_H 1
-
 /* Define to 1 if you have the <sys/ioctl.h> header file. */
 #define HAVE_SYS_IOCTL_H 1
 
