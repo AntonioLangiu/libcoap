@@ -70,6 +70,15 @@ int coap_socket_connect_udp(coap_socket_t *sock, const coap_address_t *local_if,
         goto error;
     }
 
+    // (2) Set the timeout
+    struct timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 5000;
+
+    if (setsockopt(sock->fd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
+        printf("setsockopt failed\n");
+    }
+
     sock->flags |= COAP_SOCKET_CONNECTED;
     return 1;
 error:
@@ -90,6 +99,10 @@ ssize_t coap_network_send(coap_socket_t *sock, const coap_session_t *session, co
 
 
 ssize_t coap_network_read(coap_socket_t *sock, coap_packet_t *packet) {
+
+    assert(sock);
+    assert(packet);
+
     ssize_t len = -1;
     if ((sock->flags & COAP_SOCKET_CAN_READ) == 0) {
         return -1;
@@ -98,8 +111,11 @@ ssize_t coap_network_read(coap_socket_t *sock, coap_packet_t *packet) {
         sock->flags &= ~COAP_SOCKET_CAN_READ;
     }
 
+    struct sockaddr srcaddr;
+    socklen_t socklen = sizeof(struct sockaddr_in6);
+
     if (sock->flags & COAP_SOCKET_CONNECTED) {
-        len = recv(sock->fd, packet->payload, COAP_RXBUFFER_SIZE, 0);
+        len = recvfrom(sock->fd, packet->payload, COAP_RXBUFFER_SIZE, 0, NULL, NULL);
         if (len < 0) {
             if (errno == ECONNREFUSED) {
                 /* client-side ICMP destination unreachable, ignore it */
@@ -242,9 +258,9 @@ int coap_run_once(coap_context_t *ctx, unsigned timeout_ms) {
 
     for (i=0; i<num_sockets; i++) {
         sockets[i]->flags |= COAP_SOCKET_CAN_READ;
-        sockets[i]->flags |= COAP_SOCKET_CAN_WRITE;
     }
     coap_ticks(&now);
+
     coap_read(ctx, now);
 
     return (int)(((now - before) * 1000) / COAP_TICKS_PER_SECOND);
