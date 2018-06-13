@@ -183,8 +183,8 @@ coap_print_addr(const struct coap_address_t *addr, unsigned char *buf, size_t le
 
     break;
   default:
-    memcpy(buf, "(unknown address type)", min(22, len));
-    return min(22, len);
+    memcpy(buf, "(unknown address type)\0", min(23, len));
+    return min(23, len);
   }
 
   /* Cast needed for Windows, since it doesn't have the correct API signature. */
