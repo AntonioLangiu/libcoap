@@ -70,14 +70,7 @@ int coap_socket_connect_udp(coap_socket_t *sock, const coap_address_t *local_if,
         goto error;
     }
 
-    // (2) Set the timeout
-    struct timeval timeout;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 5000;
 
-    if (setsockopt(sock->fd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
-        printf("setsockopt failed\n");
-    }
 
     sock->flags |= COAP_SOCKET_CONNECTED;
     return 1;
@@ -258,10 +251,19 @@ int coap_run_once(coap_context_t *ctx, unsigned timeout_ms) {
 
     for (i=0; i<num_sockets; i++) {
         sockets[i]->flags |= COAP_SOCKET_CAN_READ;
+        // Set the timeout
+        // TODO: it is not optimal to make it everytime
+        struct timeval timeout;
+        timeout.tv_sec = 0;
+        timeout.tv_usec = timeout_ms*1000;
+
+        if (setsockopt(sockets[i]->fd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
+            coap_log(LOG_WARNING, "setsockopt failed\n");
+        }
     }
-    coap_ticks(&now);
 
     coap_read(ctx, now);
+    coap_ticks(&now);
 
     return (int)(((now - before) * 1000) / COAP_TICKS_PER_SECOND);
 }
